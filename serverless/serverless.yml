@@ -1,11 +1,14 @@
 service: serverless # NOTE: Don't put the word "google" in here
 
+custom: ${file(./serverless.env.yml)}
+
 provider:
   name: google
   runtime: nodejs
-  project: receipt-ocr
+  project: ${self:custom.env.GCP_PROJECT_ID}
   # the path to the credentials file needs to be absolute
-  credentials: ~/.gcloud/keyfile.json
+  credentials: ${self:custom.env.GCP_JSON_KEY_PATH}
+
 
 plugins:
   - serverless-google-cloudfunctions
@@ -19,21 +22,16 @@ package:
     - .git/**
 
 functions:
-  first:
-    handler: http
-    events:
-      - http: path
-
   # NOTE: the following uses an "event" event (pubSub event in this case).
   # Please create the corresponding resources in the Google Cloud
   # before deploying this service through Serverless
 
-  #second:
-  #  handler: event
-  #  events:
-  #    - event:
-  #        eventType: providers/cloud.pubsub/eventTypes/topic.publish
-  #        resource: projects/*/topics/my-topic
+  reader:
+    handler: event
+    events:
+      - event:
+          eventType: google.storage.object.finalize
+          resource: projects/${self:custom.env.GCP_PROJECT_NAME}/buckets/${self:custom.env.GCS_BUCKET_NAME}
 
 # you can define resources, templates etc. the same way you would in a
 # Google Cloud deployment configuration
