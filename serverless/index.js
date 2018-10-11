@@ -1,6 +1,11 @@
 'use strict';
 const vision = require('@google-cloud/vision');
 const client = new vision.ImageAnnotatorClient();
+const BigQuery = require('@google-cloud/bigquery');
+
+const PROJECT_ID = process.env.GCLOUD_PROJECT;
+const DATASET_ID = 'receipt_ocr';
+const TABLE_NAME = 'receipt_details';
 
 exports.event = async (event, callback) => {
     const gcs_uri = `gs://${event.bucket}/${event.name}`
@@ -12,13 +17,36 @@ exports.event = async (event, callback) => {
     console.log(parseDate(fullText));
     console.log(parseTime(fullText));
     console.log(parseNote(fullText));
+
+    const record = {
+        date: parseDate(fullText),
+        time: parseTime(fullText),
+        amount: parseAmount(fullText),
+        note: parseNote(fullText),
+        fullText
+    };
+    insertRecord(record);
+};
+
+const insertRecord = async (record) => {
+    const bigQuery = new BigQuery({PROJECT_ID});
+    let dataset = bigQuery.dataset(DATASET_ID);
+    const existsResponse = await dataset.exists();
+    const exists = existsResponse[0];
+    if (!exists) {
+        dataset = await bigQuery.createDataset(DATASET_ID);
+    }
+    const table = dataset.table(TABLE_NAME);
+    const schema = 'date:string, time:string, amount:string, note:string, fullText:string';
+    const response = await table.insert(record, { autoCreate: true, schema });
+    console.log(response[0]);
 };
 
 const parseDate = (fullText) => {
-    const dateRegExp = /\s(\d{4})年(\d{1,2})(?:月|\s)(\d{1,2})(?:日|\s)/;
+    const dateRegExp = /\s(\d{4})(?:年|-|\/)(\d{1,2})(?:月|-|\/|\s)(\d{1,2})(?:日|\s)/;
     const dateMatched = fullText.match(dateRegExp);
     if (dateMatched) {
-        return `${dateMatched[1]}-${dateMatched[2].padStart(2, 'O')}-${dateMatched[3].padStart(2, '0')}`;
+        return correctNumericChars(`${dateMatched[1]}-${dateMatched[2].padStart(2, 'O')}-${dateMatched[3].padStart(2, '0')}`);
     }
 };
 
@@ -26,8 +54,15 @@ const parseTime = (fullText) => {
     const timeRegExp = /\s(\d{1,2})(?:時|:)(\d{1,2})(?:分|\s)/;
     const timeMatched = fullText.match(timeRegExp);
     if (timeMatched) {
-        return `${timeMatched[1].padStart(2, '0')}:${timeMatched[2].padStart(2, '0')}`;
+        return correctNumericChars(`${timeMatched[1].padStart(2, '0')}:${timeMatched[2].padStart(2, '0')}`);
     }
+    return "";
+};
+
+const correctNumericChars = (str) => {
+    str = str.replace(/o|O|○|０/, '0');
+    str = str.replace(/l|i|I|１/, '1');
+    return str;
 };
 
 const parseAmount = (fullText) => {
