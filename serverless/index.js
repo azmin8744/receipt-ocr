@@ -2,6 +2,9 @@
 const vision = require('@google-cloud/vision');
 const client = new vision.ImageAnnotatorClient();
 const BigQuery = require('@google-cloud/bigquery');
+const { Storage } = require('@google-cloud/storage');
+const moment = require('moment-timezone');
+moment.tz.setDefault('Asia/Tokyo');
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT;
 const DATASET_ID = 'receipt_ocr';
@@ -27,6 +30,25 @@ exports.event = async (event, callback) => {
     };
     insertRecord(record);
 };
+
+exports.CSVFile = async (req, res) => {
+    const now = moment().format('YYYY-MM-DD-HH-mm');
+    const storage = new Storage({ projectId: PROJECT_ID });
+    const file = storage.bucket(req.query.bucket).file(`${ now }.csv`);
+
+    const bigQuery = new BigQuery({ PROJECT_ID });
+    const dataset = bigQuery.dataset(DATASET_ID);
+    const table = dataset.table(TABLE_NAME);
+    try {
+        await table.extract(file, (err, resp) => {});
+        const url = await file.getSignedUrl({ action: 'read', expires: moment().add(10, 'm') })[0];
+        await table.delete();
+        res.status(200).send({ url });
+    } catch (e) {
+        console.log(e);
+        res.status(500).send({ error: 'error' });
+    }
+}
 
 const insertRecord = async (record) => {
     const bigQuery = new BigQuery({PROJECT_ID});
