@@ -29,6 +29,7 @@ exports.event = async (event, callback) => {
         fullText
     };
     insertRecord(record);
+    res.status(200).json({ status: 'done' });
 };
 
 exports.CSVFile = async (req, res) => {
@@ -43,10 +44,21 @@ exports.CSVFile = async (req, res) => {
         await table.extract(file, (err, resp) => {});
         const url = await file.getSignedUrl({ action: 'read', expires: moment().add(10, 'm') })[0];
         await table.delete();
-        res.status(200).send({ url });
+        res.status(200).json({ url });
     } catch (e) {
         console.log(e);
-        res.status(500).send({ error: 'error' });
+        res.status(500).json({ error: 'error' });
+    }
+}
+
+exports.clearBucket = async (req, res) => {
+    const storage = new Storage({ projectId: PROJECT_ID });
+    const bucket = storage.bucket(req.query.bucket);
+    try {
+        await bucket.deleteFiles();
+        res.status(200).json();
+    } catch (e) {
+        res.status(500).json({ error: 'error' });
     }
 }
 

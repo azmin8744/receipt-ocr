@@ -10,3 +10,9 @@ gcloud beta functions deploy CSVFile\
     --project $GCP_PROJECT_ID\
     --trigger-http\
     --region $GCP_REGION
+
+gcloud beta functions deploy clearBucket\
+    --runtime nodejs8\
+    --project $GCP_PROJECT_ID\
+    --trigger-http\
+    --region $GCP_REGION
